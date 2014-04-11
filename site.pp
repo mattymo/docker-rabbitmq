@@ -22,10 +22,7 @@ if $stomp {
 }
 
 class { 'rabbitmq::server':
-  service_ensure     => $production ? {
-    default        => stopped,
-    "docker-build" => running,
-  },
+  service_ensure     => running,
   delete_guest_user  => true,
   config_cluster     => false,
   cluster_disk_nodes => [],
