@@ -1,44 +1,21 @@
 $fuel_settings = parseyaml($astute_settings_yaml)
+$fuel_version = parseyaml($fuel_version_yaml)
+
+if is_hash($::fuel_version) and $::fuel_version['VERSION'] and $::fuel_version['VERSION']['production'] {
+  $production = $::fuel_version['VERSION']['production']
+}
+else {
+  $production = 'docker-build'
+}
 
 $management_port = "55672"
 $stompport = "61613"
 $stomp = false
 $vhost = "mcollective"
 
-class { 'rabbitmq::server':
-  service_ensure     => 'running',
-  delete_guest_user  => true,
-  config_cluster     => false,
-  cluster_disk_nodes => [],
-  config_stomp       => true,
-  stomp_port         => $stompport,
-  node_ip_address    => 'UNSET',
-}
-
-#FIXME: ulimit disabling
-file { "/etc/default/rabbitmq-server":
-  ensure  => absent,
-  require => Package["rabbitmq-server"],
-  before  => Service["rabbitmq-server"],
-}
-
 # naily
 $rabbitmq_astute_user = "naily"
 $rabbitmq_astute_password = "naily"
-rabbitmq_user { $rabbitmq_astute_user:
-  admin     => true,
-  password  => $rabbitmq_astute_password,
-  provider  => 'rabbitmqctl',
-  require   => Class['rabbitmq::server'],
-}
-
-rabbitmq_user_permissions { "${rabbitmq_astute_user}@/":
-  configure_permission => '.*',
-  write_permission     => '.*',
-  read_permission      => '.*',
-  provider             => 'rabbitmqctl',
-  require              => Class['rabbitmq::server'],
-}
 
 #mcollective
 $user = "mcollective"
@@ -51,46 +28,84 @@ if $stomp {
   $actual_vhost = $vhost
 }
 
-rabbitmq_user { $user:
-  admin    => true,
-  password => $password,
-  provider => 'rabbitmqctl',
-  require  => Class['rabbitmq::server'],
+class { 'rabbitmq::server':
+  service_ensure     => $production ? {
+    default        => stopped,
+    "docker-build" => running,
+  },
+  delete_guest_user  => true,
+  config_cluster     => false,
+  cluster_disk_nodes => [],
+  config_stomp       => true,
+  stomp_port         => $stompport,
+  node_ip_address    => 'UNSET',
 }
 
-rabbitmq_user_permissions { "${user}@${actual_vhost}":
-  configure_permission => '.*',
-  write_permission     => '.*',
-  read_permission      => '.*',
-  provider             => 'rabbitmqctl',
-  require              => [Class['rabbitmq::server'], Rabbitmq_user[$user],]
-}
-
-file { "/etc/rabbitmq/enabled_plugins":
-  content => template("mcollective/enabled_plugins.erb"),
-  owner   => root,
-  group   => root,
-  mode    => 0644,
-  require => Package["rabbitmq-server"],
-  notify  => Service["rabbitmq-server"],
-}
-
-exec { 'create-mcollective-directed-exchange':
-  command   => "curl -i -u ${user}:${password} -H \"content-type:application/json\" -XPUT \
-    -d'{\"type\":\"direct\",\"durable\":true}' http://localhost:${management_port}/api/exchanges/${actual_vhost}/mcollective_directed",
-  logoutput => true,
-  require   => [Service['rabbitmq-server'], Rabbitmq_user_permissions["${user}@${actual_vhost}"]],
-  path      => '/bin:/usr/bin:/sbin:/usr/sbin',
-  tries     => 10,
-  try_sleep => 3,
-}
-
-exec { 'create-mcollective-broadcast-exchange':
-  command   => "curl -i -u ${user}:${password} -H \"content-type:application/json\" -XPUT \
-    -d'{\"type\":\"topic\",\"durable\":true}' http://localhost:${management_port}/api/exchanges/${actual_vhost}/mcollective_broadcast",
-  logoutput => true,
-  require   => [Service['rabbitmq-server'], Rabbitmq_user_permissions["${user}@${actual_vhost}"]],
-  path      => '/bin:/usr/bin:/sbin:/usr/sbin',
-  tries     => 10,
-  try_sleep => 3,
+if $production == "docker-build" {
+  
+  #ulimit disabling
+  file { "/etc/default/rabbitmq-server":
+    ensure  => absent,
+    require => Package["rabbitmq-server"],
+    before  => Service["rabbitmq-server"],
+  }
+  
+  file { "/etc/rabbitmq/enabled_plugins":
+    content => template("mcollective/enabled_plugins.erb"),
+    owner   => root,
+    group   => root,
+    mode    => 0644,
+    require => Package["rabbitmq-server"],
+    notify  => Service["rabbitmq-server"],
+  }
+  
+  rabbitmq_user { $rabbitmq_astute_user:
+    admin     => true,
+    password  => $rabbitmq_astute_password,
+    provider  => 'rabbitmqctl',
+    require   => Class['rabbitmq::server'],
+  }
+  
+  rabbitmq_user_permissions { "${rabbitmq_astute_user}@/":
+    configure_permission => '.*',
+    write_permission     => '.*',
+    read_permission      => '.*',
+    provider             => 'rabbitmqctl',
+    require              => Class['rabbitmq::server'],
+  }
+  
+  rabbitmq_user { $user:
+    admin    => true,
+    password => $password,
+    provider => 'rabbitmqctl',
+    require  => Class['rabbitmq::server'],
+  }
+  
+  rabbitmq_user_permissions { "${user}@${actual_vhost}":
+    configure_permission => '.*',
+    write_permission     => '.*',
+    read_permission      => '.*',
+    provider             => 'rabbitmqctl',
+    require              => [Class['rabbitmq::server'], Rabbitmq_user[$user],]
+  }
+  
+  exec { 'create-mcollective-directed-exchange':
+    command   => "curl -i -u ${user}:${password} -H \"content-type:application/json\" -XPUT \
+      -d'{\"type\":\"direct\",\"durable\":true}' http://localhost:${management_port}/api/exchanges/${actual_vhost}/mcollective_directed",
+    logoutput => true,
+    require   => [Service['rabbitmq-server'], Rabbitmq_user_permissions["${user}@${actual_vhost}"]],
+    path      => '/bin:/usr/bin:/sbin:/usr/sbin',
+    tries     => 10,
+    try_sleep => 3,
+  }
+  
+  exec { 'create-mcollective-broadcast-exchange':
+    command   => "curl -i -u ${user}:${password} -H \"content-type:application/json\" -XPUT \
+      -d'{\"type\":\"topic\",\"durable\":true}' http://localhost:${management_port}/api/exchanges/${actual_vhost}/mcollective_broadcast",
+    logoutput => true,
+    require   => [Service['rabbitmq-server'], Rabbitmq_user_permissions["${user}@${actual_vhost}"]],
+    path      => '/bin:/usr/bin:/sbin:/usr/sbin',
+    tries     => 10,
+    try_sleep => 3,
+  }
 }
