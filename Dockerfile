@@ -15,6 +15,7 @@ ADD site.pp /root/site.pp
 
 RUN touch /var/lib/hiera/common.yaml
 RUN chmod +x /usr/local/bin/start.sh
+RUN /usr/bin/puppet apply -d -v /root/site.pp
 
 EXPOSE 4369
 EXPOSE 5672
