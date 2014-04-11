@@ -39,6 +39,15 @@ file { "/etc/default/rabbitmq-server":
   before  => Service["rabbitmq-server"],
 }
 
+file { "/var/log/rabbitmq":
+  ensure  => directory,
+  owner   => 'rabbitmq',
+  group   => 'rabbitmq',
+  mode    => 0755,
+  require => Package["rabbitmq-server"],
+  before  => Service["rabbitmq-server"],
+}
+
 file { "/etc/rabbitmq/enabled_plugins":
   content => template("mcollective/enabled_plugins.erb"),
   owner   => root,
