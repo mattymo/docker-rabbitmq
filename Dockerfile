@@ -11,10 +11,12 @@ RUN yum --quiet install -y ruby21-puppet
 
 ADD etc /etc
 
-RUN touch /var/lib/hiera/common.yaml
+RUN mkdir -p /var/lib/hiera && touch /var/lib/hiera/common.yaml
+RUN /usr/bin/puppet apply -v /etc/puppet/modules/nailgun/examples/rabbitmq-only.pp
+
+
 ADD start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
-RUN /usr/bin/puppet apply -v /etc/puppet/modules/nailgun/examples/rabbitmq-only.pp
 
 EXPOSE 4369
 EXPOSE 5672
