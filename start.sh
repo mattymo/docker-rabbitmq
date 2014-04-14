@@ -1,4 +1,6 @@
 #!/bin/bash
+mkdir -p /var/log/rabbitmq
+chown -R rabbitmq:rabbitmq /var/log/rabbitmq
 
 puppet apply -v /etc/puppet/modules/nailgun/examples/rabbitmq-only.pp
 

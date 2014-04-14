@@ -12,7 +12,7 @@ RUN yum --quiet install -y rabbitmq-server
 
 ADD etc /etc
 
-RUN mkdir -p /var/lib/hiera && touch /var/lib/hiera/common.yaml
+RUN mkdir -p /var/lib/hiera && touch /var/lib/hiera/common.yaml; mkdir -p /var/log/rabbitmq
 RUN /usr/bin/puppet apply -v /etc/puppet/modules/nailgun/examples/rabbitmq-only.pp
 
 
